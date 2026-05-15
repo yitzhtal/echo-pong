@@ -1,0 +1,16 @@
+.git
+.github
+.DS_Store
+Dockerfile
+README.md
+docs
+charts
+secrets
+.env
+.env.*
+.cache
+*.log
+*.out
+*.test
+dist
+bin
