@@ -57,8 +57,8 @@ Kubernetes security:
 
 CI/CD security:
 
-- Pull requests run Go formatting, vetting, race-enabled tests, image build, and vulnerability scan.
-- Release image scanning fails on `high` and `critical` findings before pushing the multi-arch production image.
+- Pull requests run Go formatting, vetting, race-enabled tests, image build, and Anchore/Trivy vulnerability scans.
+- Image scans currently print high/critical findings in the workflow logs without failing the build. Re-enable blocking by setting Anchore `fail-build: true` and Trivy `exit-code: "1"` once the accepted baseline is clean.
 - Dependabot is enabled for GitHub Actions, Go modules, and Docker base images.
 - For a stricter production setup, pin third-party GitHub Actions to full commit SHAs and rotate them through Dependabot-reviewed updates.
 
@@ -71,13 +71,13 @@ CI/CD security:
 - `go test -race -cover`
 - Helm lint and template rendering
 - local Docker build
-- vulnerability scan with high/critical release prevention
+- non-blocking Anchore and Trivy image scans with table output in logs
 
 `release.yml` runs only on semantic version tags such as `v1.2.3`:
 
 - builds binary archives for Linux, macOS, and Windows on amd64 and arm64
 - creates checksums
-- scans a local Linux image
+- scans local amd64 and arm64 images with Anchore and Trivy before publishing
 - pushes a multi-architecture image to GHCR
 - publishes a GitHub Release with the binary artifacts
 
@@ -101,7 +101,7 @@ Recommended deployment policy:
 
 - Development can use semver tags.
 - Staging should use the exact release tag.
-- Production should pin the image digest after the release scan passes.
+- Production should pin the image digest after reviewing the release scan output.
 
 ## EKS Deployment Strategy
 

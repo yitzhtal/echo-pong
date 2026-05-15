@@ -131,7 +131,7 @@ This repository now includes the production assets requested by the assignment:
 
 - `Dockerfile` builds a static Go binary and runs it in a distroless nonroot image.
 - `charts/echo-pong` contains the single Kubernetes workload manifest source.
-- `.github/workflows/ci.yml` validates PRs with Go checks, tests, Docker build, and image scanning.
+- `.github/workflows/ci.yml` validates PRs with Go checks, tests, Docker build, and non-blocking Anchore/Trivy image scans.
 - `.github/workflows/release.yml` publishes multi-architecture GHCR images and binary GitHub releases from semver tags.
 - `docs/production-readiness.md` explains deployment, scaling, security, EKS, global image distribution, and stale-version management.
 
