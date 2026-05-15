@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
+	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -19,6 +25,14 @@ type Response struct {
 }
 
 var secret string
+var ready atomic.Bool
+
+const (
+	defaultPort     = "8080"
+	shutdownTimeout = 25 * time.Second
+	shutdownDrain   = 5 * time.Second
+	startupDelay    = 10 * time.Second
+)
 
 // CLI flags
 var (
@@ -54,14 +68,42 @@ func readSecretFromFile() error {
 	return nil
 }
 
+func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		log.Printf("Error encoding JSON response: %v", err)
+	}
+}
+
+func requireMethod(method string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != method {
+			w.Header().Set("Allow", method)
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
+				"error": "method not allowed",
+			})
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // authMiddleware checks for valid Authorization header
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 		if authHeader == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "Authorization header required",
 			})
 			log.Printf("🚫 Unauthorized access attempt from %s - missing auth header", r.RemoteAddr)
@@ -70,14 +112,12 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Support both "Bearer <token>" and direct token formats
 		token := authHeader
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token = strings.TrimSpace(authHeader[len("Bearer "):])
 		}
 
-		if token != secret {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{
+		if subtle.ConstantTimeCompare([]byte(token), []byte(secret)) != 1 {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "Invalid authorization token",
 			})
 			log.Printf("🚫 Unauthorized access attempt from %s - invalid token", r.RemoteAddr)
@@ -90,7 +130,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // validatePassword checks if the provided password matches the secret
 func validatePassword(pwd string) bool {
-	return pwd == secret
+	return subtle.ConstantTimeCompare([]byte(pwd), []byte(secret)) == 1
 }
 
 // runCLI handles CLI mode operations
@@ -142,7 +182,7 @@ func runCLI() {
 
 // printCLIHelp shows usage information
 func printCLIHelp() {
-	fmt.Println(`
+	fmt.Print(`
 🏓 Ping Pong Game - CLI & Server
 
 USAGE:
@@ -194,30 +234,71 @@ func main() {
 	// Server mode continues below
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = defaultPort
 	}
 
+	mux := http.NewServeMux()
+
 	// Protected endpoints with authentication
-	http.HandleFunc("/ping", authMiddleware(pingHandler))
-	http.HandleFunc("/pong", authMiddleware(pongHandler))
+	mux.HandleFunc("/ping", requireMethod(http.MethodGet, authMiddleware(pingHandler)))
+	mux.HandleFunc("/pong", requireMethod(http.MethodGet, authMiddleware(pongHandler)))
 
 	// Public endpoints
-	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/", rootHandler)
+	mux.HandleFunc("/health", requireMethod(http.MethodGet, healthHandler))
+	mux.HandleFunc("/ready", requireMethod(http.MethodGet, readyHandler))
+	mux.HandleFunc("/", requireMethod(http.MethodGet, rootHandler))
+
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           securityHeaders(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	log.Printf("🏓 Ping-Pong server starting on port %s", port)
 	log.Printf("📍 Available endpoints:")
 	log.Printf("   GET /ping  - Returns pong (🔐 Auth required)")
 	log.Printf("   GET /pong  - Returns ping (🔐 Auth required)")
 	log.Printf("   GET /health - Health check")
+	log.Printf("   GET /ready - Readiness check")
 	log.Printf("   GET /      - API documentation")
 
 	log.Printf("Thinking for 10 seconds before starting the server")
-	time.Sleep(10 * time.Second)
+	select {
+	case <-time.After(startupDelay):
+	case <-ctx.Done():
+		log.Printf("Shutdown requested before server startup completed")
+		return
+	}
 
 	log.Printf("Starting the server")
+	ready.Store(true)
 
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	go func() {
+		<-ctx.Done()
+		// Marking readiness false first lets Kubernetes drain traffic before the
+		// process exits during a rolling update or node eviction.
+		ready.Store(false)
+		time.Sleep(shutdownDrain)
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Graceful shutdown failed: %v", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("Server failed: %v", err)
+	}
+
+	log.Printf("Server stopped")
 }
 
 func pingHandler(w http.ResponseWriter, r *http.Request) {
@@ -227,14 +308,7 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
 		Server:    "ping-pong-server",
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding ping response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, response)
 
 	log.Printf("🏓 PING received from %s → responding with PONG", r.RemoteAddr)
 }
@@ -246,14 +320,7 @@ func pongHandler(w http.ResponseWriter, r *http.Request) {
 		Server:    "ping-pong-server",
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding pong response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, response)
 
 	log.Printf("🏓 PONG received from %s → responding with PING", r.RemoteAddr)
 }
@@ -264,19 +331,37 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		"timestamp": time.Now(),
 		"uptime":    "running",
 		"service":   "ping-pong-game",
+		"ready":     ready.Load(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, health)
+}
 
-	if err := json.NewEncoder(w).Encode(health); err != nil {
-		log.Printf("Error encoding health response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+func readyHandler(w http.ResponseWriter, r *http.Request) {
+	if !ready.Load() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status":    "not ready",
+			"timestamp": time.Now(),
+			"service":   "ping-pong-game",
+		})
 		return
 	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":    "ready",
+		"timestamp": time.Now(),
+		"service":   "ping-pong-game",
+	})
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "not found",
+		})
+		return
+	}
+
 	html := `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -357,8 +442,14 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 
     <div class="endpoint">
         <h3><span class="method">GET</span> /health</h3>
-        <p>Check if the service is healthy (for Kubernetes probes)</p>
+        <p>Check if the service process is healthy (for Kubernetes liveness probes)</p>
         <a href="/health" class="try-it">Try it →</a>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method">GET</span> /ready</h3>
+        <p>Check if the service is ready to receive traffic (for Kubernetes readiness probes)</p>
+        <a href="/ready" class="try-it">Try it →</a>
     </div>
 
     <div class="footer">
