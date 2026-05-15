@@ -45,7 +45,6 @@ jobs:
 
       - name: Render Helm chart
         run: helm template echo-pong charts/echo-pong --namespace echo-pong >/tmp/echo-pong-rendered.yaml
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

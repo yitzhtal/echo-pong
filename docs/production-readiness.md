@@ -7,7 +7,7 @@ The service is a small stateless Go API, so the production shape is deliberately
 - Static Go binary built for `linux/amd64` and `linux/arm64`.
 - Distroless nonroot container runtime.
 - Kubernetes `Deployment` behind a `ClusterIP` `Service` and `Ingress`.
-- Helm chart as the single source of Kubernetes workload manifests.
+- Both a Helm chart and Kustomize-ready `k8s/base` manifests are included as application manifest sources.
 - Token loaded from a mounted Kubernetes `Secret`; no secret value is committed.
 - Readiness, liveness, graceful shutdown, resource limits, HPA, PDB, and NetworkPolicy are all part of the default deployment.
 
@@ -47,8 +47,7 @@ Container security:
 - Privilege escalation is disabled.
 - The default seccomp profile is required.
 
-Kubernetes security:
-
+- Kubernetes security:
 - The deployment procedure labels the namespace to enforce the `restricted` Pod Security Standard.
 - Service account token automounting is disabled.
 - Secret is mounted read-only from an existing Kubernetes secret.

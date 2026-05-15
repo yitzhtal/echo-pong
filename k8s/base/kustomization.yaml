@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: echo-pong
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  - pdb.yaml
+  - hpa.yaml
+
+images:
+  - name: ghcr.io/OWNER/echo-pong
+    newName: ghcr.io/OWNER/echo-pong
+    newTag: v0.1.0

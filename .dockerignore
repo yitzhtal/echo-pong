@@ -5,6 +5,7 @@ Dockerfile
 README.md
 docs
 charts
+k8s
 secrets
 .env
 .env.*
