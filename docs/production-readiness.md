@@ -7,7 +7,7 @@ The service is a small stateless Go API, so the production shape is deliberately
 - Static Go binary built for `linux/amd64` and `linux/arm64`.
 - Distroless nonroot container runtime.
 - Kubernetes `Deployment` behind a `ClusterIP` `Service` and `Ingress`.
-- Both a Helm chart and Kustomize-ready `k8s/base` manifests are included as application manifest sources.
+- Helm chart as the single source of Kubernetes workload manifests.
 - Token loaded from a mounted Kubernetes `Secret`; no secret value is committed.
 - Readiness, liveness, graceful shutdown, resource limits, HPA, PDB, and NetworkPolicy are all part of the default deployment.
 
@@ -23,6 +23,12 @@ The application exposes:
 On `SIGTERM`, the app marks itself unready, waits briefly for endpoint propagation, and then gracefully shuts down the HTTP server. This reduces dropped requests during rolling deployments, node drains, and cluster autoscaler activity.
 
 Production releases should deploy immutable image references. Tags are friendly for humans, but the safest production deployment is pinning the image digest emitted by the release pipeline.
+
+## Kubernetes Compatibility
+
+The chart supports the latest three Kubernetes minor releases maintained by the upstream Kubernetes project. As of May 15, 2026, that support window is Kubernetes 1.36, 1.35, and 1.34.
+
+The chart declares this with `kubeVersion: ">=1.34.0-0 <1.37.0-0"` and CI runs a k3d Helm install matrix for those three minor lines. The k3d images should be bumped as K3s publishes newer stable patch releases for the supported Kubernetes minors.
 
 ## Scaling Strategy
 
@@ -47,7 +53,8 @@ Container security:
 - Privilege escalation is disabled.
 - The default seccomp profile is required.
 
-- Kubernetes security:
+Kubernetes security:
+
 - The deployment procedure labels the namespace to enforce the `restricted` Pod Security Standard.
 - Service account token automounting is disabled.
 - Secret is mounted read-only from an existing Kubernetes secret.
@@ -69,6 +76,7 @@ CI/CD security:
 - `go vet`
 - `go test -race -cover`
 - Helm lint and template rendering
+- Helm installation, rollout, and service health checks on Kubernetes 1.36, 1.35, and 1.34 via k3d
 - local Docker build
 - non-blocking Anchore and Trivy image scans with table output in logs
 
