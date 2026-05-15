@@ -72,7 +72,7 @@ Take this application to production with support for both **x86** and **ARM64** 
 - Docker
 - Minikube or Kind
 - kubectl
-- Go 1.24
+- Go 1.25.10
 - GitHub account
 
 ---

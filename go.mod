@@ -1,3 +1,3 @@
-module ping-pong-game
+module github.com/yitzhtal/echo-pong
 
-go 1.24
+go 1.25.10
