@@ -11,6 +11,7 @@ main
 
 # Output of the go coverage tool
 *.out
+.cache/
 
 # Go workspace file
 go.work
@@ -33,9 +34,6 @@ Thumbs.db
 
 # Log files
 *.log
-
-# Docker
-.dockerignore
 
 # Kubernetes secrets (if any)
 secrets/
