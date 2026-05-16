@@ -105,7 +105,7 @@ Binary releases are built with explicit `GOOS` and `GOARCH` values. This gives d
 
 Release source of truth is a Git tag.
 
-Current beta release: `v1.0.0-beta.1`.
+Current beta release: `v1.0.0-beta.2`.
 
 The container release publishes:
 

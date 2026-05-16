@@ -29,7 +29,7 @@ Install or upgrade with Helm:
 helm upgrade --install echo-pong ./charts/echo-pong \
   --namespace echo-pong \
   --set image.repository=ghcr.io/OWNER/echo-pong \
-  --set image.tag=1.0.0-beta.1 \
+  --set image.tag=1.0.0-beta.2 \
   --set secret.existingSecret=echo-pong-secret
 ```
 

@@ -137,13 +137,13 @@ This repository now includes the production assets requested by the assignment:
 
 Kubernetes support policy: the Helm chart supports the latest three upstream-supported Kubernetes minor releases. As of May 15, 2026, this is Kubernetes 1.36, 1.35, and 1.34, and CI installs the chart on all three minor lines with k3d on Linux amd64 and Linux arm64 nodes. macOS and Windows support is validated through native binary smoke tests.
 
-Current beta release: `v1.0.0-beta.1`. Beta releases are published as GitHub prereleases and should be used for validation before promoting a stable `v1.0.0` release.
+Current beta release: `v1.0.0-beta.2`. Beta releases are published as GitHub prereleases and should be used for validation before promoting a stable `v1.0.0` release.
 
 Release versioning:
 
-- Beta tags use `vMAJOR.MINOR.PATCH-beta.N`, for example `v1.0.0-beta.1`.
+- Beta tags use `vMAJOR.MINOR.PATCH-beta.N`, for example `v1.0.0-beta.2`.
 - Stable tags use `vMAJOR.MINOR.PATCH`, for example `v1.0.0`.
-- GHCR image tags omit the leading `v`, so `v1.0.0-beta.1` publishes `ghcr.io/OWNER/echo-pong:1.0.0-beta.1`.
+- GHCR image tags omit the leading `v`, so `v1.0.0-beta.2` publishes `ghcr.io/OWNER/echo-pong:1.0.0-beta.2`.
 - Stable releases also publish a `MAJOR.MINOR` stream tag, for example `1.0`; beta releases do not move stable stream tags.
 - GitHub Release assets include Linux, macOS, and Windows binaries for amd64 and arm64, a packaged Helm chart, and `SHA256SUMS`.
 
