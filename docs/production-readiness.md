@@ -72,7 +72,7 @@ CI/CD security:
 
 ## CI/CD Pipeline
 
-`ci.yml` runs on pull requests and pushes to `main`:
+`ci.yml` runs on pull requests and can be started manually with `workflow_dispatch`. It does not run again on the merge commit to `main`, because the pull request already validates the exact changes before merge.
 
 - `gofmt`
 - `go vet`
