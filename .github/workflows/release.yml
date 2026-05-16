@@ -197,12 +197,25 @@ jobs:
           pattern: echo-pong-*
           merge-multiple: true
 
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4.3.0
+
+      - name: Package Helm chart
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm lint --strict charts/echo-pong
+          helm package charts/echo-pong --destination dist
+
       - name: Create aggregate checksum
         shell: bash
         run: |
           set -euo pipefail
           cd dist
-          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 \
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.tgz" \) -print0 \
             | sort -z \
             | xargs -0 shasum -a 256 > SHA256SUMS
 
