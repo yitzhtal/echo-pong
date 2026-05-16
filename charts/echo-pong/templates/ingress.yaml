@@ -1,16 +1,22 @@
 {{- if .Values.ingress.enabled -}}
+{{- $provider := default "aws" .Values.ingress.provider -}}
+{{- $providerConfig := default dict (index .Values.ingress.providers $provider) -}}
+{{- $providerClassName := default "" (get $providerConfig "className") -}}
+{{- $className := default $providerClassName .Values.ingress.className -}}
+{{- $providerAnnotations := default dict (get $providerConfig "annotations") -}}
+{{- $annotations := mergeOverwrite (deepCopy $providerAnnotations) (default dict .Values.ingress.annotations) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "echo-pong.fullname" . }}
   labels:
     {{- include "echo-pong.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- with $annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- with .Values.ingress.className }}
+  {{- with $className }}
   ingressClassName: {{ . }}
   {{- end }}
   {{- if .Values.ingress.tls }}

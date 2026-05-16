@@ -125,19 +125,22 @@ helm upgrade --install echo-pong ./charts/echo-pong \
   --namespace echo-pong \
   --create-namespace \
   --set image.repository=<account>.dkr.ecr.<region>.amazonaws.com/echo-pong \
-  --set image.tag=v1.2.3 \
-  --set ingress.className=alb
+  --set image.tag=v1.2.3
 ```
 
 Recommended AWS components:
 
 - EKS managed node groups or Karpenter with ARM64 Graviton node pools.
-- AWS Load Balancer Controller for ALB Ingress.
+- AWS Load Balancer Controller for the chart's default ALB Ingress.
 - External Secrets Operator with AWS Secrets Manager or SSM Parameter Store.
 - IRSA for controllers that need AWS permissions.
 - ECR as the regional production registry mirror.
 - VPC endpoints for ECR, S3, CloudWatch, and Secrets Manager in private clusters.
 - CloudWatch Container Insights, Prometheus, or another metrics stack for HPA and operational visibility.
+
+The default chart values use `ingress.provider: aws`, `ingressClassName: alb`, `alb.ingress.kubernetes.io/target-type: ip`, and ALB health checks against `/health`. For Azure or GCP, keep the same Ingress template and set `ingress.provider: custom` with provider-specific `ingress.className` and `ingress.annotations` in environment values files.
+
+For production NetworkPolicy with ALB, replace the default portable `networkPolicy.ingressCIDRBlocks` value with the VPC, subnet, or load-balancer CIDR ranges that should be allowed to reach the pods.
 
 ## Fast Global Image Pulls
 

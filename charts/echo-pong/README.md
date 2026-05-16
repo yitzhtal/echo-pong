@@ -33,12 +33,24 @@ helm upgrade --install echo-pong ./charts/echo-pong \
   --set secret.existingSecret=echo-pong-secret
 ```
 
-For a local Minikube ingress test:
+The chart defaults to AWS ALB Ingress with `ingress.provider: aws`, `ingressClassName: alb`, and AWS Load Balancer Controller annotations. For Azure, GCP, or a local ingress controller, switch to a custom provider in a small values file instead of editing templates:
 
 ```bash
-minikube addons enable ingress
-echo "$(minikube ip) echo-pong.local" | sudo tee -a /etc/hosts
-curl -H 'Authorization: Bearer replace-with-a-strong-token' http://echo-pong.local/ping
+cat > provider-values.yaml <<'EOF'
+ingress:
+  provider: custom
+  className: <provider-ingress-class>
+  annotations: {}
+networkPolicy:
+  ingressCIDRBlocks:
+    - <load-balancer-or-vpc-cidr>
+EOF
+
+helm upgrade --install echo-pong ./charts/echo-pong \
+  --namespace echo-pong \
+  -f provider-values.yaml
 ```
+
+For local testing without a cloud ingress controller, use `kubectl port-forward service/echo-pong`.
 
 The chart intentionally expects an existing secret by default. In production, use External Secrets Operator with AWS Secrets Manager, SSM Parameter Store, Vault, or the platform-approved secret manager.
