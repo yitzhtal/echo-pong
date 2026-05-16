@@ -37,6 +37,10 @@ jobs:
       - name: Test
         run: go test -race -cover ./...
 
+      - name: Go vulnerability scan
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest -format text ./...
+
       - name: Set up Helm
         uses: azure/setup-helm@v4.3.0
 
@@ -44,7 +48,42 @@ jobs:
         run: helm lint --strict charts/echo-pong
 
       - name: Render Helm chart
-        run: helm template echo-pong charts/echo-pong --namespace echo-pong >/tmp/echo-pong-rendered.yaml
+        run: helm template echo-pong charts/echo-pong --namespace echo-pong > echo-pong-rendered.yaml
+
+      - name: Kubescape scan rendered Helm chart
+        uses: kubescape/github-action@47d8e4561a2a1be8e22a4edfbd02c0b97f7335cb
+        continue-on-error: true
+        with:
+          files: echo-pong-rendered.yaml
+          frameworks: nsa,mitre
+          format: pretty-printer
+          outputFile: kubescape-results
+          version: v4.0.8
+
+      - name: Show Kubescape results
+        if: always()
+        run: cat kubescape-results || true
+
+      - name: Anchore scan repository filesystem
+        uses: anchore/scan-action@v7.4.0
+        continue-on-error: true
+        with:
+          path: .
+          fail-build: false
+          severity-cutoff: high
+          output-format: table
+
+      - name: Trivy scan repository filesystem
+        uses: aquasecurity/trivy-action@v0.36.0
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: "0"
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -61,6 +100,7 @@ jobs:
 
       - name: Anchore scan local image
         uses: anchore/scan-action@v7.4.0
+        continue-on-error: true
         with:
           image: echo-pong:ci
           fail-build: false
@@ -69,29 +109,126 @@ jobs:
 
       - name: Trivy scan local image
         uses: aquasecurity/trivy-action@v0.36.0
+        continue-on-error: true
         with:
           image-ref: echo-pong:ci
           format: table
           exit-code: "0"
+          scanners: vuln
           vuln-type: os,library
           severity: HIGH,CRITICAL
 
+  binary-smoke:
+    name: binary smoke ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-24.04
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-24.04-arm
+          - goos: darwin
+            goarch: amd64
+            runner: macos-15-intel
+          - goos: darwin
+            goarch: arm64
+            runner: macos-15
+          - goos: windows
+            goarch: amd64
+            runner: windows-2025
+          - goos: windows
+            goarch: arm64
+            runner: windows-11-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Show runner platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_OS=${RUNNER_OS}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH}"
+          uname -a || true
+          go env GOOS GOARCH GOVERSION
+
+      - name: Build native binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          binary="echo-pong"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary="${binary}.exe"
+          fi
+
+          CGO_ENABLED=0 GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" \
+            go build -trimpath -ldflags="-s -w -buildid=" -o "dist/${binary}" .
+          file "dist/${binary}" || true
+
+      - name: Run CLI smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          token_file="echo-pong-token"
+          printf 'test-secret' > "${token_file}"
+
+          binary="./dist/echo-pong"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary="./dist/echo-pong.exe"
+          fi
+
+          SECRET_FILE_PATH="${token_file}" "${binary}" --mode=cli --password=test-secret ping
+          SECRET_FILE_PATH="${token_file}" "${binary}" --mode=cli --password=test-secret pong
+
   helm-install:
-    name: helm install on k8s ${{ matrix.kubernetes }}
-    runs-on: ubuntu-latest
+    name: helm install on k8s ${{ matrix.kubernetes }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         include:
           - kubernetes: "1.36"
-            cluster: echo-pong-136
+            arch: amd64
+            runner: ubuntu-24.04
+            cluster: echo-pong-136-amd64
             k3s_image: docker.io/rancher/k3s:v1.36.0-k3s1
           - kubernetes: "1.35"
-            cluster: echo-pong-135
+            arch: amd64
+            runner: ubuntu-24.04
+            cluster: echo-pong-135-amd64
             k3s_image: docker.io/rancher/k3s:v1.35.4-k3s1
           - kubernetes: "1.34"
-            cluster: echo-pong-134
+            arch: amd64
+            runner: ubuntu-24.04
+            cluster: echo-pong-134-amd64
+            k3s_image: docker.io/rancher/k3s:v1.34.7-k3s1
+          - kubernetes: "1.36"
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            cluster: echo-pong-136-arm64
+            k3s_image: docker.io/rancher/k3s:v1.36.0-k3s1
+          - kubernetes: "1.35"
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            cluster: echo-pong-135-arm64
+            k3s_image: docker.io/rancher/k3s:v1.35.4-k3s1
+          - kubernetes: "1.34"
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            cluster: echo-pong-134-arm64
             k3s_image: docker.io/rancher/k3s:v1.34.7-k3s1
     steps:
       - name: Checkout
@@ -101,7 +238,7 @@ jobs:
         uses: azure/setup-helm@v4.3.0
 
       - name: Build local image
-        run: docker build -t echo-pong:e2e .
+        run: docker build --platform linux/${{ matrix.arch }} -t echo-pong:e2e .
 
       - name: Create k3d cluster
         uses: AbsaOSS/k3d-action@v2.4.0
@@ -116,8 +253,14 @@ jobs:
 
       - name: Show cluster version and nodes
         run: |
+          echo "RUNNER_OS=${RUNNER_OS}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH}"
+          uname -a
+          docker info --format 'Docker host: {{.OSType}}/{{.Architecture}}'
           kubectl version
           kubectl get nodes -o wide
+          kubectl get nodes \
+            -o custom-columns=NAME:.metadata.name,OS:.status.nodeInfo.operatingSystem,ARCH:.status.nodeInfo.architecture,OS_IMAGE:.status.nodeInfo.osImage,KERNEL:.status.nodeInfo.kernelVersion,KUBELET:.status.nodeInfo.kubeletVersion,CONTAINER_RUNTIME:.status.nodeInfo.containerRuntimeVersion
 
       - name: Import image into k3d
         run: k3d image import echo-pong:e2e -c "${{ matrix.cluster }}" --verbose
