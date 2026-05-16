@@ -131,11 +131,11 @@ This repository now includes the production assets requested by the assignment:
 
 - `Dockerfile` builds a static Go binary and runs it in a distroless nonroot image.
 - `charts/echo-pong` contains the single Kubernetes workload manifest source.
-- `.github/workflows/ci.yml` validates PRs with Go checks, tests, Docker build, non-blocking Anchore/Trivy scans, and k3d Helm installation tests.
+- `.github/workflows/ci.yml` validates PRs with Go checks, tests, Helm rendering, non-blocking Kubescape/Govulncheck/Anchore/Trivy scans, Docker build, native binary smoke tests, and k3d Helm installation tests.
 - `.github/workflows/release.yml` publishes multi-architecture GHCR images and binary GitHub releases from semver tags.
 - `docs/production-readiness.md` explains deployment, scaling, security, EKS, global image distribution, and stale-version management.
 
-Kubernetes support policy: the Helm chart supports the latest three upstream-supported Kubernetes minor releases. As of May 15, 2026, this is Kubernetes 1.36, 1.35, and 1.34, and CI installs the chart on all three minor lines with k3d.
+Kubernetes support policy: the Helm chart supports the latest three upstream-supported Kubernetes minor releases. As of May 15, 2026, this is Kubernetes 1.36, 1.35, and 1.34, and CI installs the chart on all three minor lines with k3d on Linux amd64 and Linux arm64 nodes. macOS and Windows support is validated through native binary smoke tests.
 
 Quick local flow:
 

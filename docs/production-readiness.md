@@ -28,7 +28,9 @@ Production releases should deploy immutable image references. Tags are friendly 
 
 The chart supports the latest three Kubernetes minor releases maintained by the upstream Kubernetes project. As of May 15, 2026, that support window is Kubernetes 1.36, 1.35, and 1.34.
 
-The chart declares this with `kubeVersion: ">=1.34.0-0 <1.37.0-0"` and CI runs a k3d Helm install matrix for those three minor lines. The k3d images should be bumped as K3s publishes newer stable patch releases for the supported Kubernetes minors.
+The chart declares this with `kubeVersion: ">=1.34.0-0 <1.37.0-0"` and CI runs a k3d Helm install matrix for those three minor lines on Linux amd64 and Linux arm64 nodes. The k3d images should be bumped as K3s publishes newer stable patch releases for the supported Kubernetes minors.
+
+Kubernetes workloads run on Linux nodes in this CI setup. macOS and Windows are covered as binary targets, not Kubernetes node operating systems.
 
 ## Scaling Strategy
 
@@ -63,8 +65,8 @@ Kubernetes security:
 
 CI/CD security:
 
-- Pull requests run Go formatting, vetting, race-enabled tests, image build, and Anchore/Trivy vulnerability scans.
-- Image scans currently print high/critical findings in the workflow logs without failing the build. Re-enable blocking by setting Anchore `fail-build: true` and Trivy `exit-code: "1"` once the accepted baseline is clean.
+- Pull requests run Go formatting, vetting, race-enabled tests, Helm rendering, Kubescape manifest posture scanning, Govulncheck, repository/image Anchore scans, repository/image Trivy scans, image build, native binary smoke tests, and Helm install tests on amd64 and arm64 Kubernetes nodes.
+- Security scans currently print findings in the workflow logs without failing the build. Re-enable blocking once the accepted baseline is clean by removing `continue-on-error`, setting Anchore `fail-build: true`, and setting Trivy `exit-code: "1"`.
 - Dependabot is enabled for GitHub Actions, Go modules, and Docker base images.
 - For a stricter production setup, pin third-party GitHub Actions to full commit SHAs and rotate them through Dependabot-reviewed updates.
 
@@ -76,7 +78,11 @@ CI/CD security:
 - `go vet`
 - `go test -race -cover`
 - Helm lint and template rendering
-- Helm installation, rollout, and service health checks on Kubernetes 1.36, 1.35, and 1.34 via k3d
+- non-blocking Kubescape scans against the rendered Helm chart for NSA and MITRE Kubernetes posture checks
+- non-blocking Govulncheck scan for reachable Go vulnerabilities
+- non-blocking Anchore/Grype and Trivy repository filesystem scans with table output in logs
+- native binary smoke tests on Linux, macOS, and Windows for amd64 and arm64
+- Helm installation, rollout, and service health checks on Kubernetes 1.36, 1.35, and 1.34 via k3d on Linux amd64 and Linux arm64 nodes
 - local Docker build
 - non-blocking Anchore and Trivy image scans with table output in logs
 
