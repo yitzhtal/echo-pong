@@ -132,10 +132,20 @@ This repository now includes the production assets requested by the assignment:
 - `Dockerfile` builds a static Go binary and runs it in a distroless nonroot image.
 - `charts/echo-pong` contains the single Kubernetes workload manifest source.
 - `.github/workflows/ci.yml` validates PRs with Go checks, tests, Helm rendering, non-blocking Kubescape/Govulncheck/Anchore/Trivy scans, Docker build, native binary smoke tests, and k3d Helm installation tests.
-- `.github/workflows/release.yml` publishes multi-architecture GHCR images and binary GitHub releases from semver tags.
+- `.github/workflows/release.yml` publishes multi-architecture GHCR images, Helm chart packages, and binary GitHub releases from semver tags.
 - `docs/production-readiness.md` explains deployment, scaling, security, EKS, global image distribution, and stale-version management.
 
 Kubernetes support policy: the Helm chart supports the latest three upstream-supported Kubernetes minor releases. As of May 15, 2026, this is Kubernetes 1.36, 1.35, and 1.34, and CI installs the chart on all three minor lines with k3d on Linux amd64 and Linux arm64 nodes. macOS and Windows support is validated through native binary smoke tests.
+
+Current beta release: `v1.0.0-beta.1`. Beta releases are published as GitHub prereleases and should be used for validation before promoting a stable `v1.0.0` release.
+
+Release versioning:
+
+- Beta tags use `vMAJOR.MINOR.PATCH-beta.N`, for example `v1.0.0-beta.1`.
+- Stable tags use `vMAJOR.MINOR.PATCH`, for example `v1.0.0`.
+- GHCR image tags omit the leading `v`, so `v1.0.0-beta.1` publishes `ghcr.io/OWNER/echo-pong:1.0.0-beta.1`.
+- Stable releases also publish a `MAJOR.MINOR` stream tag, for example `1.0`; beta releases do not move stable stream tags.
+- GitHub Release assets include Linux, macOS, and Windows binaries for amd64 and arm64, a packaged Helm chart, and `SHA256SUMS`.
 
 Quick local flow:
 
