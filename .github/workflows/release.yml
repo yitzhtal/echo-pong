@@ -104,7 +104,7 @@ jobs:
           images: ${{ steps.image.outputs.name }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
             type=sha,prefix=sha-
 
       - name: Build amd64 scan image
@@ -224,3 +224,5 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          make_latest: ${{ !contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(github.ref_name, '-') }}

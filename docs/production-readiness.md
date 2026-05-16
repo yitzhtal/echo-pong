@@ -86,13 +86,14 @@ CI/CD security:
 - local Docker build
 - non-blocking Anchore and Trivy image scans with table output in logs
 
-`release.yml` runs only on semantic version tags such as `v1.2.3`:
+`release.yml` runs only on semantic version tags such as `v1.2.3` or prerelease tags such as `v1.2.3-beta.1`:
 
 - builds binary archives for Linux, macOS, and Windows on amd64 and arm64
 - creates checksums
 - scans local amd64 and arm64 images with Anchore and Trivy before publishing
 - pushes a multi-architecture image to GHCR
-- publishes a GitHub Release with the binary artifacts
+- packages the Helm chart
+- publishes a GitHub Release with the binary artifacts, Helm chart package, and aggregate checksum file
 
 ## Multi-Architecture Builds
 
@@ -102,19 +103,22 @@ Binary releases are built with explicit `GOOS` and `GOARCH` values. This gives d
 
 ## Versioning And Tagging
 
-Release source of truth is a Git tag: `vMAJOR.MINOR.PATCH`.
+Release source of truth is a Git tag.
+
+Current beta release: `v1.0.0-beta.1`.
 
 The container release publishes:
 
-- full semver tag, for example `v1.2.3`
-- minor stream tag, for example `1.2`
+- exact semver tag without the leading `v`, for example `1.2.3` or `1.2.3-beta.1`
+- minor stream tag for stable releases only, for example `1.2`
 - commit tag, for example `sha-<git-sha>`
 
 Recommended deployment policy:
 
-- Development can use semver tags.
-- Staging should use the exact release tag.
+- Development can use beta semver tags.
+- Staging should use the exact release tag, including the beta suffix when validating prereleases.
 - Production should pin the image digest after reviewing the release scan output.
+- Promote to a stable `vMAJOR.MINOR.PATCH` tag only after beta validation passes; beta releases are marked as GitHub prereleases and never move stable stream tags.
 
 ## EKS Deployment Strategy
 
@@ -125,7 +129,7 @@ helm upgrade --install echo-pong ./charts/echo-pong \
   --namespace echo-pong \
   --create-namespace \
   --set image.repository=<account>.dkr.ecr.<region>.amazonaws.com/echo-pong \
-  --set image.tag=v1.2.3
+  --set image.tag=1.2.3
 ```
 
 Recommended AWS components:
