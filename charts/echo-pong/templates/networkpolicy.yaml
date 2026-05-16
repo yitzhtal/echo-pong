@@ -25,9 +25,15 @@ spec:
     - Ingress
   ingress:
     - from:
+        {{- with .Values.networkPolicy.ingressNamespaceSelector }}
         - namespaceSelector:
             matchLabels:
-              {{- toYaml .Values.networkPolicy.ingressNamespaceSelector | nindent 14 }}
+              {{- toYaml . | nindent 14 }}
+        {{- end }}
+        {{- range .Values.networkPolicy.ingressCIDRBlocks }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: {{ .Values.service.port }}

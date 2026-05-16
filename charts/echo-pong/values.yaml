@@ -48,10 +48,21 @@ service:
 
 ingress:
   enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+  # Default is AWS Load Balancer Controller. Set provider to custom and provide
+  # className/annotations from an environment values file for Azure, GCP, or local clusters.
+  provider: aws
+  className: ""
+  annotations: {}
+  providers:
+    aws:
+      className: alb
+      annotations:
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+        alb.ingress.kubernetes.io/healthcheck-path: /health
+        alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+        alb.ingress.kubernetes.io/success-codes: "200"
   hosts:
     - host: echo-pong.local
       paths:
@@ -94,8 +105,13 @@ pdb:
 
 networkPolicy:
   enabled: true
-  ingressNamespaceSelector:
-    kubernetes.io/metadata.name: ingress-nginx
+  # For AWS ALB target-type=ip, traffic reaches pods from load balancer/VPC IPs.
+  # Replace the default CIDR with the allowed VPC, subnet, or load balancer ranges in production.
+  ingressNamespaceSelector: {}
+  ingressCIDRBlocks:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
 
 nodeSelector: {}
 
